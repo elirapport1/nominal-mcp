@@ -25,6 +25,7 @@ import {
 } from "../limits/budget.js";
 import { buildNominalUri, isRid, isUuid, parseNominalUri, parseRid } from "../nominal/rid.js";
 import type { RequestContext, ToolDefinition } from "../protocol/types.js";
+import { mapSettled } from "../util/concurrency.js";
 
 export interface ToolHandlerArgs {
   args: Record<string, unknown>;
@@ -219,17 +220,16 @@ export const searchTool: ToolHandler = async ({ args, ctx, client }) => {
 
   const perKind = kinds.length > 1 ? Math.max(3, Math.floor(limit / kinds.length)) : limit;
 
-  const settled = await Promise.allSettled(
-    kinds.map(async (k) => {
-      const t = searchTargets[k];
-      const res = await client.call<any>({
-        method: "POST",
-        path: t.path,
-        body: t.build(query, perKind, cursor),
-      });
-      return { kind: k, res };
-    }),
-  );
+  // Bounded: Workers cap simultaneous outbound connections at 6.
+  const settled = await mapSettled(kinds, async (k) => {
+    const t = searchTargets[k];
+    const res = await client.call<any>({
+      method: "POST",
+      path: t.path,
+      body: t.build(query, perKind, cursor),
+    });
+    return { kind: k, res };
+  });
 
   const results: Record<string, unknown>[] = [];
   const unavailable: Record<string, string> = {};
@@ -551,8 +551,9 @@ export const queryChannelsTool: ToolHandler = async ({ args, ctx, client, handle
     throw new ToolError("'start' must be before 'end'.");
   }
 
-  const series = await Promise.allSettled(
-    channels.map(async (name) => {
+  // Bounded: up to 10 channels may be requested, but Workers cap simultaneous
+  // outbound connections at 6.
+  const series = await mapSettled(channels, async (name) => {
       const res = await client.call<any>({
         method: "POST",
         path: "/compute/v2/compute",
@@ -578,8 +579,7 @@ export const queryChannelsTool: ToolHandler = async ({ args, ctx, client, handle
         v: typeof p?.value === "number" ? p.value : null,
       }));
       return { name, points };
-    }),
-  );
+  });
 
   const out: Record<string, unknown>[] = [];
   for (let i = 0; i < series.length; i++) {

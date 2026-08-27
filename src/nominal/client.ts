@@ -5,6 +5,7 @@
  * and no shared key: if Nominal would deny the user, it denies the tool.
  */
 import { assertAllowedHost, type AuthContext } from "../auth/token.js";
+import { withRetry } from "../util/concurrency.js";
 
 export interface NominalCallOptions {
   method: string;
@@ -50,6 +51,26 @@ export class NominalClient {
   }
 
   async call<T = unknown>(opts: NominalCallOptions): Promise<T> {
+    // Only retry calls that cannot have side effects. A write that appears to
+    // fail may already have landed, and replaying it could duplicate an event.
+    const safe =
+      opts.method === "GET" || (opts.method === "POST" && this.isQueryLike(opts.path));
+    if (!safe) return this.callOnce<T>(opts);
+    return withRetry(() => this.callOnce<T>(opts), {
+      retryable: (e) => e instanceof NominalError && e.retryable,
+    });
+  }
+
+  /**
+   * Conjure uses POST for queries as well as writes, so the verb alone cannot
+   * say whether a call is safe. These path shapes are read-only by convention
+   * across the API surface.
+   */
+  private isQueryLike(path: string): boolean {
+    return /\/(search|get|batch-get|list|multiple|count|histogram|aggregate)([-/]|$)/i.test(path);
+  }
+
+  private async callOnce<T = unknown>(opts: NominalCallOptions): Promise<T> {
     const url = this.buildUrl(opts.path, opts.query);
 
     const headers: Record<string, string> = {

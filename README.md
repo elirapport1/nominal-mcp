@@ -44,8 +44,13 @@ never see more than your account already can.
 ### Or run it over stdio
 
 ```bash
-NOMINAL_API_KEY=<key> NOMINAL_MCP_URL=https://<your-worker>.workers.dev/mcp npx nominal-mcp
+NOMINAL_API_KEY=<key> \
+NOMINAL_MCP_URL=https://<your-worker>.workers.dev/mcp \
+npx github:elirapport1/nominal-mcp
 ```
+
+(Runs straight from the repo — nothing is published to npm, so plain
+`npx nominal-mcp` will not resolve.)
 
 Per the MCP auth spec, stdio servers read credentials from the environment instead of running
 an OAuth flow. Nothing is written to disk.

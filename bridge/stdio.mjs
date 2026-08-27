@@ -14,7 +14,8 @@
  * endpoint over TLS, and never written to disk or logged.
  *
  * Usage:
- *   NOMINAL_API_KEY=<key> NOMINAL_MCP_URL=https://your-worker/mcp npx nominal-mcp
+ *   NOMINAL_API_KEY=<key> NOMINAL_MCP_URL=https://your-worker/mcp \\
+ *     npx github:elirapport1/nominal-mcp
  *
  * Environment:
  *   NOMINAL_API_KEY   required — your Nominal API key (Settings -> API keys)
@@ -40,7 +41,8 @@ if (!URL_) {
   fatal(
     "No MCP endpoint configured.\n" +
       "  This build has no default endpoint, so set one explicitly:\n" +
-      "    NOMINAL_MCP_URL=https://<your-worker>/mcp NOMINAL_API_KEY=<key> npx nominal-mcp\n" +
+      "    NOMINAL_MCP_URL=https://<your-worker>/mcp NOMINAL_API_KEY=<key> \\\n" +
+      "      npx github:elirapport1/nominal-mcp\n" +
       "  Deploy your own in three commands - see the README.",
   );
 }
@@ -60,7 +62,7 @@ if (!API_KEY) {
   fatal(
     "NOMINAL_API_KEY is not set.\n" +
       "  Get a key from the Nominal app under Settings -> API keys, then:\n" +
-      "    NOMINAL_API_KEY=<key> npx nominal-mcp\n" +
+      "    NOMINAL_API_KEY=<key> NOMINAL_MCP_URL=<url> npx github:elirapport1/nominal-mcp\n" +
       "  Or connect over HTTP to a deployment and authenticate in a browser:\n" +
       "    claude mcp add --transport http nominal https://<your-worker>/mcp",
   );
