@@ -167,6 +167,31 @@ For CI deploys set the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secret
 
 ---
 
+## Capacity
+
+The design property that matters for scale: **a tool call writes no storage.**
+
+Access tokens are self-contained encrypted envelopes rather than pointers into a
+session store, so validating one is a decrypt and a few comparisons — no KV read
+on the hot path. Rate limiting uses Cloudflare's edge binding, which also writes
+nothing. The only KV writes happen during an OAuth authorization: roughly three
+per user, per login, and none thereafter.
+
+That means request volume is bounded by your Workers request limit rather than
+by a storage quota, and the number of people who can use a deployment is bounded
+by *new logins per day*, not by how hard they use it.
+
+This was not true of the first implementation. The rate limiter counted requests
+in KV — one read and one write per request — which on Cloudflare's free plan
+would have stopped the server after about a thousand requests a day. Check your
+plan's current limits, but the shape is: heavy use by an existing user is nearly
+free, and only onboarding touches storage.
+
+`/health` reports which rate limiter is live (`binding` vs `isolate-fallback`),
+and the deploy smoke test fails if a deployment silently falls back.
+
+---
+
 ## Endpoints
 
 | Path | |
