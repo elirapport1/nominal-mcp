@@ -118,6 +118,11 @@ npm run dev           # wrangler dev
 | `test/conformance/auth.test.ts` | RFC 9728/8414/8707/9207/7636, PKCE, DCR, token forgery |
 | `test/fuzz/` | six generators, seven invariants, seeded and replayable |
 
+**Verification boundary:** the protocol, auth, limits, and catalog-policy layers are fully
+covered. The Nominal-side *request encoding* for the tier-1 tools was derived from the
+generated `nominal-api` Conjure client and tested against a stub, not against a live Nominal
+deployment — see [SPEC.md §9.3](SPEC.md). If you have a key, one command closes that gap.
+
 The fuzzer runs **every 20 minutes** against the live deployment
 ([`.github/workflows/fuzz.yml`](.github/workflows/fuzz.yml)). Generators cover JSON-RPC
 structure, the protocol/era matrix, tool arguments, catalog operation ids, auth forgery, and

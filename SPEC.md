@@ -438,9 +438,30 @@ A checklist derived line-by-line from the spec, one test per MUST. Includes ever
 `ttlMs`/`cacheScope` presence on all six cacheable methods, deterministic `tools/list`
 ordering, and `-32601`→404 vs `-32602`→400 status mapping.
 
-### 9.3 Live smoke — `test/conformance/live.test.ts`
-Runs against the deployed Worker with a real Nominal key. Gated on `NOMINAL_API_KEY`; skipped,
-not failed, when absent.
+### 9.3 Live smoke
+`.github/workflows/deploy.yml` smoke-tests the deployment after every deploy: health, both
+well-known metadata documents, `server/discover`, `tools/list`, and that an unauthenticated
+`tools/call` is challenged with a 401.
+
+**Known verification gap.** Everything above runs without a Nominal account. The tier-1 tools'
+*request bodies* — the Conjure union shapes for `search-runs`, `search-assets`, `compute`, and
+`generateExportPresignedLink` — were derived by introspecting and round-tripping the generated
+`nominal-api` client, and are exercised against a stub that returns realistic shapes. They have
+**not** been confirmed against a live Nominal deployment. The protocol layer, auth layer,
+limits, and catalog policy are fully verified; the Nominal-side request encoding is verified
+only against the generated client.
+
+Closing it is a one-command job for anyone with a key:
+
+```bash
+NOMINAL_API_KEY=<key> npx tsx test/fuzz/run.ts --target <url> --generators tool-args,catalog
+```
+
+The response-parsing code is defensive about this (`?.` throughout, per-channel
+`Promise.allSettled`, per-kind failure isolation in `nominal_search`), so a shape mismatch
+degrades to an instructive `isError` result rather than a crash — but it would still be a
+wrong result, and that is worth stating plainly rather than implying coverage that does not
+exist.
 
 ### 9.4 Fuzzing — `test/fuzz/`
 
