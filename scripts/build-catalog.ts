@@ -129,7 +129,12 @@ const ops = raw.map((r) => {
     path: r.path,
     pathParams: Object.keys(r.path_params),
     queryParams: Object.keys(r.query_params),
-    bodyArg: r.body_arg && r.body_arg !== "None" ? r.body_arg : null,
+    // Resolve the body argument here rather than guessing at runtime. The raw
+    // value is a Python expression like `_conjure_encoder.default(request)`;
+    // the runtime used to substring-match it against the argument list, which
+    // is ordering-dependent and would break silently if a future API revision
+    // introduced an argument name that is a substring of another.
+    bodyArg: resolveBodyArg(r.body_arg, argNames),
     args: argNames,
     argTypes: Object.fromEntries(
       Object.entries(r.arg_types).map(([k, v]) => [k, simplifyType(v)]),
@@ -144,6 +149,16 @@ const ops = raw.map((r) => {
       .replace(/[^a-z0-9]+/g, " "),
   };
 });
+
+/** Extract the argument actually serialized as the request body, or null. */
+function resolveBodyArg(raw: string | null, args: string[]): string | null {
+  if (!raw || raw === "None") return null;
+  const m = /default\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/.exec(raw);
+  if (m?.[1] && args.includes(m[1])) return m[1];
+  // Fall back to an exact argument name, never a substring.
+  if (args.includes(raw)) return raw;
+  return null;
+}
 
 function simplifyType(t: string): string {
   return t

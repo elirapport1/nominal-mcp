@@ -378,6 +378,23 @@ describe("operation catalog", () => {
     }
   });
 
+  it("resolves every body argument to a real declared argument", () => {
+    // Resolved at build time. The runtime used to substring-match a Python
+    // expression against the argument list, which is ordering-dependent and
+    // would break silently on a catalog refresh.
+    const withBody = OPERATIONS.filter((o) => o.bodyArg);
+    expect(withBody.length).toBeGreaterThan(300);
+    for (const o of withBody) {
+      expect(o.args, o.id).toContain(o.bodyArg!);
+    }
+  });
+
+  it("gives GET operations no request body", () => {
+    for (const o of OPERATIONS.filter((o) => o.method === "GET")) {
+      expect(o.bodyArg, o.id).toBeNull();
+    }
+  });
+
   it("declares every path-template placeholder as a path param", () => {
     for (const o of OPERATIONS) {
       const placeholders = [...o.path.matchAll(/\{([^}]+)\}/g)].map((m) => m[1]);

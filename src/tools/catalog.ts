@@ -226,10 +226,9 @@ export const apiCallTool: ToolHandler = async ({ args, ctx, client }) => {
   // Body: whatever argument the generated client serialized as the JSON body.
   let body: unknown;
   if (op.bodyArg) {
-    const bodyArgName = op.args.find(
-      (a) => op.bodyArg === a || op.bodyArg?.includes(`(${a})`) || op.bodyArg?.includes(a),
-    );
-    if (bodyArgName && bodyArgName in provided) {
+    // Resolved at catalog build time — never guessed from the argument list.
+    const bodyArgName = op.bodyArg;
+    if (bodyArgName in provided) {
       body = provided[bodyArgName];
     } else if (op.args.length === 1 && op.args[0] && op.args[0] in provided) {
       body = provided[op.args[0]];
