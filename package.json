@@ -1,0 +1,40 @@
+{
+  "name": "nominal-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for the Nominal hardware test platform — all 467 API operations, MCP 2026-07-28 with backward compatibility",
+  "type": "module",
+  "bin": {
+    "nominal-mcp": "./bridge/stdio.mjs"
+  },
+  "files": [
+    "bridge",
+    "README.md"
+  ],
+  "scripts": {
+    "build:catalog": "tsx scripts/build-catalog.ts",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
+    "test": "vitest run test/unit test/conformance",
+    "test:unit": "vitest run test/unit",
+    "test:conformance": "vitest run test/conformance",
+    "test:fuzz": "tsx test/fuzz/run.ts",
+    "budget": "tsx scripts/token-budget.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "nominal",
+    "telemetry",
+    "hardware-testing"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260827.1",
+    "@types/node": "^26.4.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.126.0"
+  }
+}

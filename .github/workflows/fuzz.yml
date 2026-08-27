@@ -1,0 +1,127 @@
+name: Fuzz
+
+# Continuous adversarial testing against the live deployment.
+# Every 20 minutes, as specified in SPEC.md §9.4.
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: Number of cases to run
+        default: "4000"
+      seed:
+        description: Fixed seed (blank = derive from the run id)
+        default: ""
+
+concurrency:
+  group: fuzz
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Seeded by run id so every failure replays exactly.
+      - name: Choose seed
+        id: seed
+        run: |
+          if [ -n "${{ inputs.seed }}" ]; then
+            echo "value=${{ inputs.seed }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=$(( ${{ github.run_id }} % 2147483647 ))" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fuzz in-process
+        id: inproc
+        run: |
+          npx tsx test/fuzz/run.ts \
+            --cases "${{ inputs.cases || '4000' }}" \
+            --seed "${{ steps.seed.outputs.value }}" 2>&1 | tee fuzz-inprocess.log
+
+      # The live pass exercises the real edge runtime, TLS, and KV — things the
+      # in-process harness cannot reach. Skipped when no URL is configured.
+      #
+      # Only the protocol-level generators run here: they are refused before any
+      # tool executes, so a fuzz run never turns into load against Nominal's
+      # production API. Requests are paced under the server's own rate limit so
+      # the run tests the protocol rather than the throttle.
+      - name: Fuzz live deployment
+        if: vars.DEPLOY_URL != ''
+        run: |
+          npx tsx test/fuzz/run.ts \
+            --target "${{ vars.DEPLOY_URL }}" \
+            --generators structural,protocol,auth \
+            --rps 1.6 \
+            --cases 300 \
+            --seed "${{ steps.seed.outputs.value }}" 2>&1 | tee fuzz-live.log
+
+      - name: Live health check
+        if: vars.DEPLOY_URL != ''
+        run: |
+          code=$(curl -s -o health.json -w '%{http_code}' "${{ vars.DEPLOY_URL }}/health")
+          echo "health: $code"; cat health.json
+          test "$code" = "200"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-${{ github.run_id }}
+          path: |
+            fuzz-*.log
+            health.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # One rolling issue rather than a new one every 20 minutes.
+      - name: Report failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const seed = "${{ steps.seed.outputs.value }}";
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const title = "Fuzz: invariant violation";
+            const body = [
+              `A scheduled fuzz run failed.`,
+              ``,
+              `- Run: ${url}`,
+              `- Seed: \`${seed}\``,
+              `- Commit: \`${context.sha.slice(0, 8)}\``,
+              ``,
+              `Replay locally:`,
+              "```",
+              `npx tsx test/fuzz/run.ts --seed ${seed} --cases 4000`,
+              "```",
+              ``,
+              `Download the run artifact for the full log and the failing case.`,
+            ].join("\n");
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              ...context.repo, state: "open", labels: "fuzz",
+            });
+            const existing = open.find(i => i.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: existing.number, body,
+              });
+            } else {
+              await github.rest.issues.create({
+                ...context.repo, title, body, labels: ["fuzz", "bug"],
+              });
+            }

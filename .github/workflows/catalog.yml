@@ -1,0 +1,58 @@
+name: Refresh API catalog
+
+# The Nominal API moves — nominal-api has over 1,100 releases. A weekly diff PR
+# is how this server avoids silently drifting away from the platform.
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: npm ci
+
+      - name: Extract the latest API surface
+        run: |
+          pip install --quiet nominal-api
+          python scripts/extract-catalog.py
+          mv catalog.json src/nominal/catalog.raw.json
+          npx tsx scripts/build-catalog.ts
+
+      - name: Verify the new catalog still passes
+        run: |
+          npm run typecheck
+          npm test
+          npm run budget
+
+      - name: Open a PR if the catalog changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/refresh-catalog
+          title: "chore: refresh Nominal API catalog"
+          commit-message: "chore: refresh Nominal API catalog from latest nominal-api"
+          body: |
+            Automated weekly refresh of `src/nominal/catalog.json` from the
+            latest `nominal-api` release.
+
+            Review the diff for **new or reclassified operations** — especially
+            anything moving between the `read`, `mutating`, and `internal`
+            policies, since that changes which scope is required to call it.
+          labels: dependencies
+          add-paths: src/nominal/catalog.json

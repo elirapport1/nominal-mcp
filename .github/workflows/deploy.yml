@@ -1,0 +1,87 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Never deploy something that does not pass its own gates.
+      - name: Gate on tests and budget
+        run: |
+          npm run typecheck
+          npm test
+          npm run budget
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Smoke-test the live deployment
+        if: vars.DEPLOY_URL != ''
+        run: |
+          set -e
+          base="${{ vars.DEPLOY_URL }}"
+
+          echo "--- health"
+          curl -fsS "$base/health" | tee /dev/stderr | grep -q '"status":"ok"'
+
+          echo "--- RFC 9728 protected resource metadata"
+          curl -fsS "$base/.well-known/oauth-protected-resource" | grep -q authorization_servers
+
+          echo "--- RFC 8414 authorization server metadata"
+          curl -fsS "$base/.well-known/oauth-authorization-server" | grep -q '"code_challenge_methods_supported":\["S256"\]'
+
+          echo "--- server/discover"
+          curl -fsS -X POST "$base/mcp" \
+            -H 'content-type: application/json' \
+            -H 'MCP-Protocol-Version: 2026-07-28' \
+            -H 'Mcp-Method: server/discover' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
+            | tee /dev/stderr | grep -q '"resultType":"complete"'
+
+          echo "--- tools/list"
+          curl -fsS -X POST "$base/mcp" \
+            -H 'content-type: application/json' \
+            -H 'MCP-Protocol-Version: 2026-07-28' \
+            -H 'Mcp-Method: tools/list' \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}' \
+            | grep -q nominal_search
+
+          echo "--- unauthenticated tools/call must be challenged"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$base/mcp" \
+            -H 'content-type: application/json' \
+            -H 'MCP-Protocol-Version: 2026-07-28' \
+            -H 'Mcp-Method: tools/call' -H 'Mcp-Name: nominal_search' \
+            -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"nominal_search","arguments":{},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}')
+          echo "got $code"; test "$code" = "401"
+
+          echo "all smoke checks passed"
+
+      - name: Roll back on smoke-test failure
+        if: failure()
+        run: |
+          echo "::error::Smoke tests failed after deploy. Roll back with:"
+          echo "  npx wrangler rollback"
+          exit 1

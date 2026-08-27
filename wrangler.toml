@@ -1,0 +1,22 @@
+name = "nominal-mcp"
+main = "src/index.ts"
+compatibility_date = "2025-01-15"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[observability]
+enabled = true
+
+[vars]
+ENVIRONMENT = "production"
+STRICT_HEADERS = "0"
+RATE_LIMIT_RPM = "120"
+
+# Created with:  wrangler kv namespace create OAUTH_KV
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "PLACEHOLDER_REPLACED_AT_DEPLOY"
+
+# Secrets (wrangler secret put <NAME>):
+#   TOKEN_SECRET   — AES-GCM key material for access tokens
+#   HANDLE_SECRET  — HMAC key for result handles

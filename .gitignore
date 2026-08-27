@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
+.env
+.env.*
+test/fuzz/corpus/*.json
+!test/fuzz/corpus/.gitkeep
+src/nominal/catalog.raw.json

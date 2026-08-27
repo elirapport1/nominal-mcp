@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit + conformance tests
+        run: npm test
+
+      - name: tools/list token budget
+        run: npm run budget
+
+      - name: Fuzz (in-process, fixed seeds for reproducibility)
+        run: |
+          for seed in 1 2 3; do
+            npx tsx test/fuzz/run.ts --cases 3000 --seed $seed
+          done
+
+      - name: Audit dependencies
+        run: npm audit --omit=dev --audit-level=high
