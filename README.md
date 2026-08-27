@@ -16,10 +16,24 @@ Implements MCP **`2026-07-28`** (the current revision) with backward compatibili
 
 ## Quick start
 
-### Remote (recommended)
+> **No public instance is running yet.** Deploy your own in about two minutes —
+> it runs comfortably on Cloudflare's free plan.
+
+### Deploy it
 
 ```bash
-claude mcp add --transport http nominal https://nominal-mcp.elirapport.workers.dev/mcp
+git clone https://github.com/elirapport1/nominal-mcp && cd nominal-mcp && npm ci
+npx wrangler login
+npx wrangler kv namespace create OAUTH_KV      # paste the id into wrangler.toml
+openssl rand -base64 32 | npx wrangler secret put TOKEN_SECRET
+openssl rand -base64 32 | npx wrangler secret put HANDLE_SECRET
+npx wrangler deploy
+```
+
+### Connect to it
+
+```bash
+claude mcp add --transport http nominal https://<your-worker>.workers.dev/mcp
 ```
 
 A browser window opens. Paste your own Nominal API key (Nominal app → Settings → API keys).
@@ -27,10 +41,10 @@ The key is encrypted into an access token scoped to this server and is never sto
 plaintext. Every request to Nominal is made with *your* credential, so the connection can
 never see more than your account already can.
 
-### Local stdio
+### Or run it over stdio
 
 ```bash
-NOMINAL_API_KEY=<your key> npx nominal-mcp
+NOMINAL_API_KEY=<key> NOMINAL_MCP_URL=https://<your-worker>.workers.dev/mcp npx nominal-mcp
 ```
 
 Per the MCP auth spec, stdio servers read credentials from the environment instead of running

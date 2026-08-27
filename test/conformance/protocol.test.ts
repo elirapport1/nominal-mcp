@@ -237,6 +237,25 @@ describe("legacy era", () => {
 });
 
 // ===========================================================================
+describe("subscriptions", () => {
+  it("reports subscriptions/listen as not implemented", async () => {
+    // Every list this server exposes is static and resource subscribe is off,
+    // so there is nothing to push. -32601 is the honest answer; advertising the
+    // method and holding an SSE stream open would be a lie that costs money.
+    const r = await call("subscriptions/listen", { notifications: ["toolsListChanged"] });
+    expect(r.status).toBe(404);
+    expect(r.json.error.code).toBe(-32601);
+  });
+
+  it("advertises no listChanged or subscribe capability", async () => {
+    const r = await call("server/discover");
+    const caps = r.json.result.capabilities;
+    expect(caps.tools.listChanged).toBe(false);
+    expect(caps.resources.subscribe).toBe(false);
+    expect(caps.resources.listChanged).toBe(false);
+  });
+});
+
 describe("tools", () => {
   it("returns a deterministic, stable tool order", async () => {
     const a = await call("tools/list");

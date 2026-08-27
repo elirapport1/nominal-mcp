@@ -14,12 +14,11 @@
  * endpoint over TLS, and never written to disk or logged.
  *
  * Usage:
- *   NOMINAL_API_KEY=<key> npx nominal-mcp
  *   NOMINAL_API_KEY=<key> NOMINAL_MCP_URL=https://your-worker/mcp npx nominal-mcp
  *
  * Environment:
  *   NOMINAL_API_KEY   required — your Nominal API key (Settings -> API keys)
- *   NOMINAL_MCP_URL   optional — MCP endpoint (default: the public deployment)
+ *   NOMINAL_MCP_URL   required — your deployment's MCP endpoint
  *   NOMINAL_BASE_URL  optional — Nominal API base (default: api.gov.nominal.io)
  *   NOMINAL_MCP_DEBUG optional — set to 1 to log protocol traffic to stderr
  */
@@ -27,10 +26,24 @@
 import { createInterface } from "node:readline";
 import process from "node:process";
 
-const DEFAULT_URL = "https://nominal-mcp.elirapport.workers.dev/mcp";
+/**
+ * Set this to your deployment's /mcp URL. Left unset deliberately: there is no
+ * public hosted instance yet, and defaulting to a URL that does not resolve
+ * turns a clear configuration error into a confusing network failure.
+ */
+const DEFAULT_URL = "";
 
 const API_KEY = process.env.NOMINAL_API_KEY;
 const URL_ = (process.env.NOMINAL_MCP_URL || DEFAULT_URL).trim();
+
+if (!URL_) {
+  fatal(
+    "No MCP endpoint configured.\n" +
+      "  This build has no default endpoint, so set one explicitly:\n" +
+      "    NOMINAL_MCP_URL=https://<your-worker>/mcp NOMINAL_API_KEY=<key> npx nominal-mcp\n" +
+      "  Deploy your own in three commands - see the README.",
+  );
+}
 const DEBUG = process.env.NOMINAL_MCP_DEBUG === "1";
 
 /** stderr only — stdout is the protocol channel and must stay clean. */
@@ -48,8 +61,8 @@ if (!API_KEY) {
     "NOMINAL_API_KEY is not set.\n" +
       "  Get a key from the Nominal app under Settings -> API keys, then:\n" +
       "    NOMINAL_API_KEY=<key> npx nominal-mcp\n" +
-      "  Or connect over HTTP instead and authenticate in a browser:\n" +
-      `    claude mcp add --transport http nominal ${DEFAULT_URL}`,
+      "  Or connect over HTTP to a deployment and authenticate in a browser:\n" +
+      "    claude mcp add --transport http nominal https://<your-worker>/mcp",
   );
 }
 

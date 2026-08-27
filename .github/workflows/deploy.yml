@@ -37,6 +37,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --var GIT_SHA:${{ github.sha }}
 
       - name: Smoke-test the live deployment
         if: vars.DEPLOY_URL != ''
@@ -44,8 +45,14 @@ jobs:
           set -e
           base="${{ vars.DEPLOY_URL }}"
 
-          echo "--- health"
-          curl -fsS "$base/health" | tee /dev/stderr | grep -q '"status":"ok"'
+          echo "--- health, and confirm it is the build we just shipped"
+          curl -fsS "$base/health" | tee health.json | grep -q '"status":"ok"'
+          grep -q "${{ github.sha }}" health.json || {
+            echo "::error::/health reports a different commit than this deploy"; exit 1; }
+
+          echo "--- rate limiter must be the native binding, not the fallback"
+          grep -q '"rate_limiter":"binding"' health.json || {
+            echo "::error::rate limiter fell back to the in-isolate counter"; exit 1; }
 
           echo "--- RFC 9728 protected resource metadata"
           curl -fsS "$base/.well-known/oauth-protected-resource" | grep -q authorization_servers

@@ -22,6 +22,7 @@ import {
 import { TOOL_DEFINITIONS, SERVER_INFO } from "./transport/handler.js";
 import { CATALOG_STATS } from "./tools/catalog.js";
 import { landingPage } from "./landing.js";
+import { checkRateLimit, limiterKind, rateLimitResponse } from "./limits/ratelimit.js";
 import type { Env } from "./env.js";
 
 export default {
@@ -48,8 +49,9 @@ export default {
       switch (url.pathname) {
         case "/mcp":
           if (req.method === "POST") {
-            const rate = await checkRateLimit(req, env);
-            if (rate) return rate;
+            const rpm = Number(env.RATE_LIMIT_RPM ?? "120");
+            const rate = await checkRateLimit(req, env.RATE_LIMITER, rpm);
+            if (!rate.allowed) return rateLimitResponse(rate, rpm);
             return handleMcpPost(req, env, opts);
           }
           // The GET stream endpoint was removed in 2026-07-28.
@@ -98,9 +100,13 @@ export default {
           return json({
             status: "ok",
             server: SERVER_INFO,
+            // Lets a smoke test confirm it is talking to the build it just shipped.
+            commit: env.GIT_SHA ?? "unknown",
+            environment: env.ENVIRONMENT ?? "unknown",
             protocol_versions: ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"],
             tools: TOOL_DEFINITIONS.length,
             api_operations: CATALOG_STATS.total,
+            rate_limiter: limiterKind(env.RATE_LIMITER, Number(env.RATE_LIMIT_RPM ?? "120")),
             time: new Date().toISOString(),
           });
 
@@ -125,49 +131,6 @@ export default {
     }
   },
 };
-
-/**
- * Per-subject rate limit. Keyed on a hash of the credential so it survives
- * token refresh, and falls back to the client IP for unauthenticated probes.
- */
-async function checkRateLimit(req: Request, env: Env): Promise<Response | null> {
-  const rpm = Number(env.RATE_LIMIT_RPM ?? "120");
-  if (!Number.isFinite(rpm) || rpm <= 0) return null;
-
-  const auth = req.headers.get("authorization") ?? "";
-  const ip = req.headers.get("cf-connecting-ip") ?? "unknown";
-  const raw = auth ? auth.slice(-32) : ip;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
-  const key = [...new Uint8Array(digest)].slice(0, 8).map((b) => b.toString(16)).join("");
-
-  const window = Math.floor(Date.now() / 60_000);
-  const kvKey = `rl:${key}:${window}`;
-
-  const current = Number((await env.OAUTH_KV.get(kvKey)) ?? "0");
-  if (current >= rpm) {
-    return new Response(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: -32603,
-          message: `Rate limit exceeded: ${rpm} requests per minute. Retry after the window resets.`,
-          data: { retry_after_seconds: 60 - Math.floor((Date.now() % 60_000) / 1000) },
-        },
-      }),
-      {
-        status: 429,
-        headers: {
-          "content-type": "application/json",
-          "retry-after": String(60 - Math.floor((Date.now() % 60_000) / 1000)),
-        },
-      },
-    );
-  }
-  // Best-effort counter; a lost increment under contention is acceptable here.
-  await env.OAUTH_KV.put(kvKey, String(current + 1), { expirationTtl: 120 });
-  return null;
-}
 
 function preflight(req: Request, origin: string): Response {
   const requested = req.headers.get("access-control-request-headers");

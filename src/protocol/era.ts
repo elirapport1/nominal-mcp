@@ -73,7 +73,12 @@ export function negotiateLegacyVersion(requested: string): string {
 }
 
 /** Methods that exist only in one era. */
-const MODERN_ONLY = new Set(["server/discover", "subscriptions/listen"]);
+// `subscriptions/listen` is deliberately absent: every list this server
+// exposes is static (`listChanged: false`) and resource subscriptions are off,
+// so there is nothing to push. Holding a long-lived SSE stream open per client
+// to deliver notifications that can never arrive would cost a running instance
+// for no benefit. Clients get -32601, which is the honest answer.
+const MODERN_ONLY = new Set(["server/discover"]);
 const LEGACY_ONLY = new Set([
   "initialize",
   "notifications/initialized",

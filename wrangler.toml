@@ -1,7 +1,6 @@
 name = "nominal-mcp"
 main = "src/index.ts"
 compatibility_date = "2025-01-15"
-compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [observability]
@@ -9,8 +8,18 @@ enabled = true
 
 [vars]
 ENVIRONMENT = "production"
+# Overridden at deploy time with the real commit (see deploy.yml).
+GIT_SHA = "dev"
 STRICT_HEADERS = "0"
 RATE_LIMIT_RPM = "120"
+
+# Native edge rate limiting. Free, and writes nothing — an earlier KV-counter
+# implementation would have exhausted the KV free tier's 1,000 writes/day at
+# roughly a thousand requests.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 120, period = 60 }
 
 # Created with:  wrangler kv namespace create OAUTH_KV
 [[kv_namespaces]]

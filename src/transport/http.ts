@@ -2,7 +2,8 @@
  * Streamable HTTP transport (MCP 2026-07-28), with backward compatibility.
  *
  * The 2026-07-28 revision removed the GET stream endpoint and protocol-level
- * sessions, so this is a single POST endpoint plus SSE for `subscriptions/listen`.
+ * sessions, so this is a single POST endpoint. `subscriptions/listen` is not
+ * implemented — see era.ts for why there is nothing to push.
  *
  * Validation order matters and is specified in SPEC.md §3.3 — it determines
  * which error a malformed request gets, and the conformance suite asserts it
@@ -41,6 +42,8 @@ const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
 export interface TransportOptions {
   canonicalUri: string;
   origin: string;
+  /** The caller's Origin, once validated against the allowlist. */
+  requestOrigin?: string | null;
 }
 
 /** Methods callable without credentials, so a client can discover the server. */
@@ -73,6 +76,9 @@ export async function handleMcpPost(
       opts,
     );
   }
+
+  // Safe to echo now that it has passed the allowlist.
+  opts = { ...opts, requestOrigin: origin };
 
   // A token in the query string is forbidden by the auth spec.
   const url = new URL(req.url);
@@ -408,7 +414,9 @@ export function baseHeaders(opts: TransportOptions): Record<string, string> {
     "x-content-type-options": "nosniff",
     "strict-transport-security": "max-age=31536000; includeSubDomains",
     "referrer-policy": "no-referrer",
-    "access-control-allow-origin": opts.origin,
+    // The Origin was already validated against the allowlist before we got
+    // here, so echoing it is safe and is what a browser client needs.
+    "access-control-allow-origin": opts.requestOrigin || opts.origin,
   };
 }
 
