@@ -91,7 +91,7 @@ jobs:
       # One rolling issue rather than a new one every 20 minutes.
       - name: Report failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const seed = "${{ steps.seed.outputs.value }}";
