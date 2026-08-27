@@ -154,6 +154,64 @@ describe("token validation", () => {
   });
 });
 
+describe("direct mode base URL", () => {
+  // Nominal deploys to GovCloud, commercial, private clouds and on-prem. Direct
+  // mode used to hardcode the GovCloud host, so every call from a caller on any
+  // other deployment was silently sent to the wrong place.
+  it("routes a raw Nominal key to the base URL the caller names", async () => {
+    stub.reset();
+    installDefaultRoutes();
+    const r = await call(
+      "tools/call",
+      { name: "nominal_search", arguments: { kind: "run" } },
+      {
+        token: "a-raw-nominal-api-key",
+        headers: { "mcp-name": "nominal_search", "x-nominal-base-url": "https://api.nominal.io/api" },
+      },
+    );
+    expect(r.status).toBe(200);
+    const hosts = stub.calls.map((c) => new URL(c.url).host);
+    expect(hosts).toContain("api.nominal.io");
+    expect(hosts).not.toContain("api.gov.nominal.io");
+  });
+
+  it("defaults to the GovCloud host when no base is given", async () => {
+    stub.reset();
+    installDefaultRoutes();
+    await call(
+      "tools/call",
+      { name: "nominal_search", arguments: { kind: "run" } },
+      { token: "a-raw-nominal-api-key", headers: { "mcp-name": "nominal_search" } },
+    );
+    expect(stub.calls.map((c) => new URL(c.url).host)).toContain("api.gov.nominal.io");
+  });
+
+  it("refuses a base URL that is not a Nominal host", async () => {
+    const r = await call(
+      "tools/call",
+      { name: "nominal_search", arguments: {} },
+      {
+        token: "a-raw-nominal-api-key",
+        headers: { "mcp-name": "nominal_search", "x-nominal-base-url": "https://evil.example/api" },
+      },
+    );
+    expect(r.status).toBe(401);
+    expect(r.headers.get("www-authenticate")).toContain("not an allowed Nominal host");
+  });
+
+  it("refuses a plaintext http base URL", async () => {
+    const r = await call(
+      "tools/call",
+      { name: "nominal_search", arguments: {} },
+      {
+        token: "a-raw-nominal-api-key",
+        headers: { "mcp-name": "nominal_search", "x-nominal-base-url": "http://api.nominal.io/api" },
+      },
+    );
+    expect(r.status).toBe(401);
+  });
+});
+
 describe("scopes", () => {
   it("refuses a write tool on a read-only connection", async () => {
     const token = await testToken(["nominal:read"]);

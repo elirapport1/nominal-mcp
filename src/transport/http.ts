@@ -237,7 +237,12 @@ export async function handleMcpPost(
   const authorization = req.headers.get("authorization");
   if (authorization) {
     try {
-      auth = await authenticate(authorization, env, opts.canonicalUri);
+      auth = await authenticate(
+        authorization,
+        env,
+        opts.canonicalUri,
+        req.headers.get("x-nominal-base-url"),
+      );
     } catch (e) {
       authFailure = e instanceof UnauthorizedError ? e : new UnauthorizedError("Invalid credentials");
     }
@@ -335,7 +340,12 @@ function mcpNameMatches(headerValue: string, expected: string): boolean {
   return false;
 }
 
-async function authenticate(authorization: string, env: Env, canonicalUri: string) {
+async function authenticate(
+  authorization: string,
+  env: Env,
+  canonicalUri: string,
+  baseUrlHeader?: string | null,
+) {
   const m = /^Bearer\s+(.+)$/i.exec(authorization.trim());
   if (!m?.[1]) {
     throw new UnauthorizedError("Authorization header must be 'Bearer <token>'", "invalid_request");
@@ -362,9 +372,21 @@ async function authenticate(authorization: string, env: Env, canonicalUri: strin
   }
 
   // Otherwise treat it as a raw Nominal key (stdio bridge / direct mode).
+  //
+  // Nominal is deployed to GovCloud, commercial, private clouds and on-prem, so
+  // the base URL cannot be hardcoded: a caller on any host other than the
+  // GovCloud default would otherwise have every call silently sent to the wrong
+  // deployment. The header is still validated against the host allowlist.
+  const base = (baseUrlHeader ?? "").trim() || DEFAULT_NOMINAL_BASE;
   try {
-    return await directAuth(token, DEFAULT_NOMINAL_BASE);
-  } catch {
+    return await directAuth(token, base);
+  } catch (e) {
+    if (baseUrlHeader && e instanceof TokenError && e.reason === "host") {
+      throw new UnauthorizedError(
+        `X-Nominal-Base-Url is not an allowed Nominal host: ${baseUrlHeader}`,
+        "invalid_request",
+      );
+    }
     throw new UnauthorizedError("Credential is not a valid MCP access token or Nominal API key.");
   }
 }
@@ -410,7 +432,7 @@ export function baseHeaders(opts: TransportOptions): Record<string, string> {
   return {
     "content-type": "application/json",
     "cache-control": "no-store",
-    vary: "Origin, Authorization, MCP-Protocol-Version",
+    vary: "Origin, Authorization, MCP-Protocol-Version, X-Nominal-Base-Url",
     "x-content-type-options": "nosniff",
     "strict-transport-security": "max-age=31536000; includeSubDomains",
     "referrer-policy": "no-referrer",

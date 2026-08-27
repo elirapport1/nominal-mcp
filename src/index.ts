@@ -140,7 +140,8 @@ function preflight(req: Request, origin: string): Response {
       "access-control-allow-origin": req.headers.get("origin") ?? origin,
       "access-control-allow-methods": "POST, GET, OPTIONS",
       "access-control-allow-headers":
-        requested ?? "Content-Type, Authorization, MCP-Protocol-Version, Mcp-Method, Mcp-Name",
+        requested ??
+        "Content-Type, Authorization, MCP-Protocol-Version, Mcp-Method, Mcp-Name, X-Nominal-Base-Url",
       "access-control-max-age": "86400",
       vary: "Origin",
     },

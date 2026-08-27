@@ -1,0 +1,26 @@
+name: Bug report
+description: Something the server does wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include the tool or method called, and the response you got.
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: Protocol version
+      description: The MCP-Protocol-Version your client sent, if known.
+      placeholder: "2026-07-28"
+  - type: input
+    id: client
+    attributes:
+      label: Client
+      placeholder: "Claude Code / MCP Inspector / other"
+  - type: input
+    id: seed
+    attributes:
+      label: Fuzz seed
+      description: If a fuzz run found this, paste the seed so it replays exactly.

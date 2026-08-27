@@ -52,6 +52,10 @@ npx github:elirapport1/nominal-mcp
 (Runs straight from the repo — nothing is published to npm, so plain
 `npx nominal-mcp` will not resolve.)
 
+If your Nominal is not the GovCloud deployment, set `NOMINAL_BASE_URL` too —
+commercial is `https://api.nominal.io/api`, and private-cloud and on-prem hosts
+under `*.nominal.io` are accepted.
+
 Per the MCP auth spec, stdio servers read credentials from the environment instead of running
 an OAuth flow. Nothing is written to disk.
 

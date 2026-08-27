@@ -47,6 +47,7 @@ if (!URL_) {
   );
 }
 const DEBUG = process.env.NOMINAL_MCP_DEBUG === "1";
+const BASE_URL = (process.env.NOMINAL_BASE_URL || "").trim();
 
 /** stderr only — stdout is the protocol channel and must stay clean. */
 function log(...args) {
@@ -86,6 +87,11 @@ function protocolHeaders(msg) {
     authorization: `Bearer ${API_KEY}`,
     "user-agent": "nominal-mcp-stdio/1.0",
   };
+
+  // Nominal runs on GovCloud, commercial, private-cloud and on-prem hosts, so
+  // the server cannot assume one. Forward the caller's base when set; the
+  // server validates it against its host allowlist.
+  if (BASE_URL) headers["x-nominal-base-url"] = BASE_URL;
 
   const version =
     msg?.params?._meta?.["io.modelcontextprotocol/protocolVersion"] ??
