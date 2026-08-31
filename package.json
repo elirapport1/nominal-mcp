@@ -30,11 +30,11 @@
   ],
   "license": "MIT",
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260827.1",
+    "@cloudflare/workers-types": "^5.20260828.1",
     "@types/node": "^26.4.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8",
-    "wrangler": "^4.126.0"
+    "wrangler": "^4.127.0"
   }
 }
